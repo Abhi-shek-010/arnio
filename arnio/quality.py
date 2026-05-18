@@ -43,6 +43,10 @@ class ColumnProfile:
     min: Any = None
     max: Any = None
     mean: float | None = None
+    q25: float | None = None
+    q50: float | None = None
+    q75: float | None = None
+    q95: float | None = None
     sample_values: list[Any] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
     top_values: list[tuple[Any, int, float]] | None = None
@@ -69,6 +73,16 @@ class ColumnProfile:
             "min": _clean_scalar(self.min),
             "max": _clean_scalar(self.max),
             "mean": self.mean,
+            **(
+                {
+                    "q25": _clean_scalar(self.q25),
+                    "q50": _clean_scalar(self.q50),
+                    "q75": _clean_scalar(self.q75),
+                    "q95": _clean_scalar(self.q95),
+                }
+                if _is_numeric_dtype(self.dtype)
+                else {}
+            ),
             "sample_values": sample_values,
             "warnings": list(self.warnings),
             "top_values": (
@@ -209,6 +223,16 @@ class DataQualityReport:
                     "min": _clean_scalar(column.min),
                     "max": _clean_scalar(column.max),
                     "mean": column.mean,
+                    **(
+                        {
+                            "q25": _clean_scalar(column.q25),
+                            "q50": _clean_scalar(column.q50),
+                            "q75": _clean_scalar(column.q75),
+                            "q95": _clean_scalar(column.q95),
+                        }
+                        if _is_numeric_dtype(column.dtype)
+                        else {}
+                    ),
                     "warnings": column.warnings,
                     "top_values": column.top_values,
                 }
@@ -429,6 +453,7 @@ def _profile_column(
     empty_string_count = 0
     whitespace_count = 0
     top_values = None
+    q25 = q50 = q75 = q95 = None
     if dtype == "string" or pd.api.types.is_string_dtype(series.dtype):
         as_text = non_null.astype("string")
         stripped = as_text.str.strip()
@@ -444,6 +469,11 @@ def _profile_column(
             min_value = numeric_non_null.min()
             max_value = numeric_non_null.max()
             mean = float(numeric_non_null.mean())
+            quantiles = numeric_non_null.quantile([0.25, 0.50, 0.75, 0.95])
+            q25 = round(float(quantiles.loc[0.25]), 4)
+            q50 = round(float(quantiles.loc[0.50]), 4)
+            q75 = round(float(quantiles.loc[0.75]), 4)
+            q95 = round(float(quantiles.loc[0.95]), 4)
     elif len(non_null) and (
         dtype == "string" or pd.api.types.is_string_dtype(series.dtype)
     ):
@@ -477,6 +507,10 @@ def _profile_column(
         min=min_value,
         max=max_value,
         mean=mean,
+        q25=q25,
+        q50=q50,
+        q75=q75,
+        q95=q95,
         sample_values=sample_values,
         warnings=warnings,
         top_values=top_values,
