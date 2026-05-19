@@ -1406,6 +1406,102 @@ class TestCombineColumns:
             )
 
 
+class TestCombineColumnsNativeRegression:
+    def test_native_matches_pandas_reference(self):
+        import numpy as np
+        import pandas as pd
+
+        rng = np.random.default_rng(42)
+        n = 10_000
+        # Use integers and strings to avoid float formatting differences between C++ and pandas
+        df = pd.DataFrame(
+            {
+                "col_a": rng.integers(0, 100, size=n).astype(str).tolist(),
+                "col_b": rng.integers(0, 100, size=n).astype(str).tolist(),
+                "label": ["str"] * n,
+            }
+        )
+        # Introduce some nulls
+        for idx in rng.integers(0, n, size=200):
+            df.at[idx, "col_a"] = None
+        for idx in rng.integers(0, n, size=200):
+            df.at[idx, "label"] = None
+
+        # Add some empty strings
+        for idx in rng.integers(0, n, size=200):
+            df.at[idx, "col_b"] = ""
+
+        frame = ar.from_pandas(df)
+        native_df = ar.to_pandas(
+            ar.combine_columns(frame, subset=["col_a", "label", "col_b"], separator="-")
+        )
+
+        # Reference: pandas
+        ref = df.copy()
+        subset_columns = ["col_a", "label", "col_b"]
+        combined = ref[subset_columns].astype("string").fillna("").agg("-".join, axis=1)
+        null_mask = ref[subset_columns].isna().all(axis=1)
+        combined = combined.mask(null_mask, pd.NA)
+        ref["combined"] = combined
+
+        pd.testing.assert_series_equal(
+            native_df["combined"], ref["combined"], check_dtype=False, check_names=False
+        )
+        assert len(native_df) == len(ref)
+
+    def test_native_all_nulls_row_produces_null(self):
+        import pandas as pd
+
+        df = pd.DataFrame({"a": [None, "hello"], "b": [None, "world"]})
+        frame = ar.from_pandas(df)
+        result = ar.to_pandas(
+            ar.combine_columns(frame, subset=["a", "b"], separator="-")
+        )
+        assert pd.isna(result["combined"]).iloc[0]
+        assert result["combined"].iloc[1] == "hello-world"
+
+    def test_native_empty_string_separator(self):
+        import pandas as pd
+
+        df = pd.DataFrame({"a": ["1", "2"], "b": ["3", "4"]})
+        frame = ar.from_pandas(df)
+        result = ar.to_pandas(
+            ar.combine_columns(frame, subset=["a", "b"], separator="")
+        )
+        assert list(result["combined"]) == ["13", "24"]
+
+    def test_native_numeric_formatting(self):
+        import pandas as pd
+
+        df = pd.DataFrame({"a": [123, 456], "b": [1.5, 0.0]})
+        frame = ar.from_pandas(df)
+        result = ar.to_pandas(
+            ar.combine_columns(frame, subset=["a", "b"], separator="|")
+        )
+        # The native path now uses shortest-round-trip float formatting (like Python's str()),
+        # which matches the pandas astype('string') contract.
+        # 1.5 stays "1.5", 0.0 becomes "0.0", integers stay as integers.
+        assert list(result["combined"]) == ["123|1.5", "456|0.0"]
+
+    def test_native_bool_formatting(self):
+        import pandas as pd
+
+        df = pd.DataFrame({"a": [True, False], "b": [False, True]})
+        frame = ar.from_pandas(df)
+        result = ar.to_pandas(
+            ar.combine_columns(frame, subset=["a", "b"], separator="|")
+        )
+        # The native path should format booleans as True / False to match
+        # the pandas astype('string') contract.
+        assert list(result["combined"]) == ["True|False", "False|True"]
+
+    def test_unsupported_input_type_raises(self):
+        with pytest.raises(
+            TypeError, match="frame must be an ArFrame or a pandas DataFrame"
+        ):
+            ar.combine_columns({"a": [1, 2]}, subset=["a"])
+
+
 class TestSafeDivideColumns:
     def test_normal_division(self, tmp_path):
         path = tmp_path / "data.csv"
