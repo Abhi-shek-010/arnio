@@ -799,6 +799,16 @@ def CountryCode(
     )
 
 
+def CurrencyCode(*, nullable: bool = True, unique: bool = False) -> Field:
+    """Create a schema field for 3-letter uppercase currency code formats."""
+    return Field(
+        dtype="string",
+        nullable=nullable,
+        semantic="currency_code",
+        unique=unique,
+    )
+
+
 def Date(
     *,
     nullable: bool = True,
@@ -1266,6 +1276,7 @@ _SEMANTIC_PATTERNS = {
     "url": r"https?://[^\s]+",
     "phone": r"\+?[0-9][0-9 .()\-]{6,}[0-9]",
     "country_code": r"[A-Z]{2}",
+    "currency_code": r"[A-Z]{3}",
     "date": r"\d{4}-\d{2}-\d{2}",
 }
 
