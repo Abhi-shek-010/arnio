@@ -406,7 +406,7 @@ def pipeline(
                     {
                         "step": name,
                         "before": rows_before,
-                        "after": result.shape[0] if dry_run else step_result.shape[0],
+                        "after": rows_before if dry_run else step_result.shape[0],
                         "dry_run": dry_run,
                     }
                 )
@@ -484,7 +484,7 @@ def pipeline(
                     {
                         "step": name,
                         "before": rows_before,
-                        "after": result.shape[0] if dry_run else step_result.shape[0],
+                        "after": rows_before if dry_run else step_result.shape[0],
                         "dry_run": dry_run,
                     }
                 )
